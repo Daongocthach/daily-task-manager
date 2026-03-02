@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager - Pro Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .eisenhower-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .quadrant { min-height: 250px; padding: 1rem; border-radius: 0.5rem; transition: all 0.3s; }
+        .bg-urgent { background-color: #fee2e2; border: 2px solid #ef4444; }
+        .bg-important { background-color: #fef3c7; border: 2px solid #f59e0b; }
+        .bg-delegate { background-color: #dcfce7; border: 2px solid #22c55e; }
+        .bg-eliminate { background-color: #f3f4f6; border: 2px solid #9ca3af; }
+        .active-mode { ring: 4px solid #6366f1; transform: scale(1.02); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans pb-20">
+
+<div class="max-w-6xl mx-auto p-6">
+    <header class="mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+            <h1 class="text-4xl font-extrabold text-indigo-600 tracking-tight">Daily Task Manager</h1>
+            <p class="text-slate-500 font-medium">"Đừng làm việc chăm chỉ, hãy làm việc thông minh."</p>
+        </div>
+
+        <div id="pomodoro-container" class="bg-white shadow-xl rounded-2xl p-6 border border-slate-200 text-center w-full md:w-80">
+            <div class="flex justify-center gap-2 mb-4">
+                <button onclick="setTimer(25, 'work')" class="text-[10px] px-2 py-1 bg-indigo-100 text-indigo-700 rounded-md font-bold hover:bg-indigo-200">FOCUS (25m)</button>
+                <button onclick="setTimer(5, 'short')" class="text-[10px] px-2 py-1 bg-green-100 text-green-700 rounded-md font-bold hover:bg-green-200">SHORT (5m)</button>
+                <button onclick="setTimer(15, 'long')" class="text-[10px] px-2 py-1 bg-blue-100 text-blue-700 rounded-md font-bold hover:bg-blue-200">LONG (15m)</button>
+            </div>
+            
+            <div id="timer" class="text-5xl font-mono font-black text-slate-800 mb-4">25:00</div>
+            
+            <div class="flex justify-center gap-3">
+                <button id="timerBtn" onclick="toggleTimer()" class="flex-1 bg-indigo-600 text-white font-bold py-2 rounded-xl hover:bg-indigo-700 transition">Bắt đầu</button>
+                <button onclick="resetTimer()" class="px-4 py-2 bg-slate-200 text-slate-600 rounded-xl hover:bg-slate-300 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
+            </div>
+            <p id="timer-status" class="text-[10px] mt-2 text-slate-400 italic">Đang trong chế độ: Làm việc</p>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
+            <h3 class="text-lg font-bold mb-4 flex items-center">
+                <span class="bg-indigo-100 text-indigo-600 p-1 rounded mr-2">＋</span> Thêm nhiệm vụ
+            </h3>
+            <div class="space-y-4">
+                <input type="text" id="taskInput" placeholder="Bạn định làm gì?" class="w-full border-slate-200 border rounded-xl p-3 focus:ring-2 focus:ring-indigo-400 outline-none transition">
+                <select id="prioritySelect" class="w-full border-slate-200 border rounded-xl p-3 bg-white">
+                    <option value="urgent">🔥 Làm ngay (Gấp & Quan trọng)</option>
+                    <option value="important">📅 Lên lịch (Quan trọng)</option>
+                    <option value="delegate">🤝 Ủy quyền (Gấp nhưng ít quan trọng)</option>
+                    <option value="eliminate">🗑️ Xem xét (Không gấp, không quan trọng)</option>
+                </select>
+                <button onclick="addTask()" class="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-black transition shadow-lg">Thêm vào ma trận</button>
+            </div>
+        </div>
+
+        <div class="lg:col-span-2">
+            <div class="eisenhower-grid">
+                <div class="quadrant bg-urgent shadow-sm" id="q-urgent">
+                    <h4 class="font-black text-red-600 text-xs uppercase tracking-widest mb-3">I. Khẩn cấp</h4>
+                </div>
+                <div class="quadrant bg-important shadow-sm" id="q-important">
+                    <h4 class="font-black text-amber-600 text-xs uppercase tracking-widest mb-3">II. Chiến lược</h4>
+                </div>
+                <div class="quadrant bg-delegate shadow-sm" id="q-delegate">
+                    <h4 class="font-black text-green-600 text-xs uppercase tracking-widest mb-3">III. Hỗ trợ</h4>
+                </div>
+                <div class="quadrant bg-eliminate shadow-sm" id="q-eliminate">
+                    <h4 class="font-black text-slate-500 text-xs uppercase tracking-widest mb-3">IV. Giải trí/Dư thừa</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- POMODORO LOGIC ---
+    let timeLeft = 25 * 60;
+    let timerId = null;
+    let currentMode = 'work'; // work, short, long
+    let initialTime = 25 * 60;
+
+    function setTimer(minutes, mode) {
+        clearInterval(timerId);
+        timerId = null;
+        currentMode = mode;
+        timeLeft = minutes * 60;
+        initialTime = timeLeft;
+        
+        // Update UI
+        const statusText = { 'work': 'Làm việc Ếch 🐸', 'short': 'Nghỉ ngắn ☕', 'long': 'Nghỉ dài 😴' };
+        document.getElementById('timer-status').textContent = `Chế độ: ${statusText[mode]}`;
+        document.getElementById('timerBtn').textContent = "Bắt đầu";
+        document.getElementById('timerBtn').className = "flex-1 bg-indigo-600 text-white font-bold py-2 rounded-xl hover:bg-indigo-700 transition";
+        updateTimerDisplay();
+    }
+
+    function resetTimer() {
+        clearInterval(timerId);
+        timerId = null;
+        timeLeft = initialTime;
+        document.getElementById('timerBtn').textContent = "Bắt đầu";
+        document.getElementById('timerBtn').className = "flex-1 bg-indigo-600 text-white font-bold py-2 rounded-xl hover:bg-indigo-700 transition";
+        updateTimerDisplay();
+    }
+
+    function updateTimerDisplay() {
+        const mins = Math.floor(timeLeft / 60);
+        const secs = timeLeft % 60;
+        document.getElementById('timer').textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        document.title = `(${mins}:${secs.toString().padStart(2, '0')}) Smart Task`;
+    }
+
+    function toggleTimer() {
+        const btn = document.getElementById('timerBtn');
+        if (timerId) {
+            clearInterval(timerId);
+            timerId = null;
+            btn.textContent = "Tiếp tục";
+            btn.className = "flex-1 bg-emerald-500 text-white font-bold py-2 rounded-xl";
+        } else {
+            btn.textContent = "Tạm dừng";
+            btn.className = "flex-1 bg-rose-500 text-white font-bold py-2 rounded-xl";
+            timerId = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                if (timeLeft <= 0) {
+                    clearInterval(timerId);
+                    const alertMsg = currentMode === 'work' ? "Tuyệt vời! Nghỉ ngơi chút nhé." : "Hết giờ nghỉ, quay lại làm việc thôi!";
+                    alert(alertMsg);
+                    resetTimer();
+                }
+            }, 1000);
+        }
+    }
+
+    // --- TASK LOGIC ---
+    function addTask() {
+        const input = document.getElementById('taskInput');
+        const priority = document.getElementById('prioritySelect').value;
+        if (!input.value.trim()) return;
+
+        const taskText = input.value;
+        createTaskElement(taskText, priority);
+        saveTasks();
+        input.value = '';
+    }
+
+    function createTaskElement(text, priority) {
+        const taskDiv = document.createElement('div');
+        taskDiv.className = "bg-white/80 backdrop-blur-sm p-3 mb-2 rounded-lg border border-slate-200 shadow-sm flex justify-between items-center group animate-in slide-in-from-left duration-300";
+        taskDiv.innerHTML = `
+            <span class="text-sm font-medium text-slate-700">${text}</span>
+            <button onclick="this.parentElement.remove(); saveTasks();" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </button>
+        `;
+        document.getElementById(`q-${priority}`).appendChild(taskDiv);
+    }
+
+    // --- LOCAL STORAGE (Lưu dữ liệu) ---
+    function saveTasks() {
+        const tasks = [];
+        ['urgent', 'important', 'delegate', 'eliminate'].forEach(p => {
+            const container = document.getElementById(`q-${p}`);
+            const items = container.querySelectorAll('span');
+            items.forEach(item => tasks.push({ text: item.innerText, priority: p }));
+        });
+        localStorage.setItem('myTasks', JSON.stringify(tasks));
+    }
+
+    function loadTasks() {
+        const saved = localStorage.getItem('myTasks');
+        if (saved) {
+            JSON.parse(saved).forEach(t => createTaskElement(t.text, t.priority));
+        }
+    }
+
+    window.onload = loadTasks;
+</script>
+
+</body>
+</html>
